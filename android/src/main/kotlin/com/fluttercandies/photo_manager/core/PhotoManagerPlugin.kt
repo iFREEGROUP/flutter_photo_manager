@@ -3,9 +3,7 @@ package com.fluttercandies.photo_manager.core
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import com.bumptech.glide.Glide
@@ -14,7 +12,7 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.fluttercandies.photo_manager.core.entity.AssetEntity
-import com.fluttercandies.photo_manager.core.entity.FilterOption
+import com.fluttercandies.photo_manager.core.entity.filter.FilterOption
 import com.fluttercandies.photo_manager.core.entity.PermissionResult
 import com.fluttercandies.photo_manager.core.entity.ThumbLoadOption
 import com.fluttercandies.photo_manager.core.utils.ConvertUtils
@@ -79,14 +77,6 @@ class PhotoManagerPlugin(
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         val resultHandler = ResultHandler(result, call)
-        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q && !Environment.isExternalStorageLegacy()) {
-            resultHandler.replyError(
-                "STORAGE_NOT_LEGACY",
-                "Use `requestLegacyExternalStorage` when your project is targeting above Android Q.",
-                null
-            )
-            return
-        }
 
         if (call.method == "ignorePermissionCheck") {
             val ignore = call.argument<Boolean>("ignore")!!
@@ -97,20 +87,23 @@ class PhotoManagerPlugin(
 
         val handleResult = when (call.method) {
             Methods.releaseMemoryCache -> {
-                photoManager.clearCache()
+                // The plugin will not hold instances cache on Android.
                 resultHandler.reply(1)
                 true
             }
+
             Methods.log -> {
                 LogUtils.isLog = call.arguments() ?: false
                 resultHandler.reply(1)
                 true
             }
+
             Methods.openSetting -> {
                 permissionsUtils.getAppDetailSettingIntent(activity)
                 resultHandler.reply(1)
                 true
             }
+
             Methods.clearFileCache -> {
                 Glide.get(applicationContext).clearMemory()
                 runOnBackground {
@@ -119,15 +112,18 @@ class PhotoManagerPlugin(
                 }
                 true
             }
+
             Methods.forceOldAPI -> {
                 photoManager.useOldApi = true
                 resultHandler.reply(1)
                 true
             }
+
             Methods.systemVersion -> {
                 resultHandler.reply(Build.VERSION.SDK_INT.toString())
                 true
             }
+
             else -> false
         }
 
@@ -139,7 +135,7 @@ class PhotoManagerPlugin(
                 call,
                 resultHandler,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-                        && havePermissionInManifest(
+                        && permissionsUtils.havePermissionInManifest(
                     applicationContext,
                     Manifest.permission.ACCESS_MEDIA_LOCATION
                 )
@@ -158,24 +154,45 @@ class PhotoManagerPlugin(
         val needWritePermission =
             permissionsUtils.needWriteExternalStorage(call)
                     && Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q
-                    && havePermissionInManifest(
+                    && permissionsUtils.havePermissionInManifest(
                 applicationContext,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        val needReadPermission =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                    && permissionsUtils.havePermissionInManifest(
+                applicationContext,
+                Manifest.permission.READ_EXTERNAL_STORAGE
             )
         val needLocationPermission =
             permissionsUtils.needAccessLocation(call)
                     && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-                    && havePermissionInManifest(
+                    && permissionsUtils.havePermissionInManifest(
                 applicationContext,
                 Manifest.permission.ACCESS_MEDIA_LOCATION
             )
-        val permissions = arrayListOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        val permissions = arrayListOf<String>()
+        if (needReadPermission) {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
         if (needWritePermission) {
             permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
         if (needLocationPermission) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 permissions.add(Manifest.permission.ACCESS_MEDIA_LOCATION)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsUtils.addManifestWithPermission33(
+                applicationContext,
+                permissions,
+                call,
+                resultHandler
+            )
+            if (resultHandler.isReplied()) {
+                return
             }
         }
 
@@ -209,15 +226,6 @@ class PhotoManagerPlugin(
         utils.getPermissions(3001, permissions)
     }
 
-    private fun havePermissionInManifest(context: Context, permission: String): Boolean {
-        val applicationInfo = context.applicationInfo
-        val packageInfo = context.packageManager.getPackageInfo(
-            applicationInfo.packageName,
-            PackageManager.GET_PERMISSIONS
-        )
-        return packageInfo.requestedPermissions.contains(permission)
-    }
-
     private fun replyPermissionError(resultHandler: ResultHandler) {
         resultHandler.replyError(
             "Request for permission failed.",
@@ -231,246 +239,256 @@ class PhotoManagerPlugin(
         resultHandler: ResultHandler,
         needLocationPermission: Boolean
     ) {
-        when (call.method) {
-            Methods.requestPermissionExtend -> resultHandler.reply(PermissionResult.Authorized.value)
-            Methods.getAssetPathList -> {
-                if (Build.VERSION.SDK_INT >= 29) {
-                    notifyChannel.setAndroidQExperimental(true)
-                }
-                runOnBackground {
-                    val type = call.argument<Int>("type")!!
-                    val hasAll = call.argument<Boolean>("hasAll")!!
-                    val option = call.getOption()
-                    val onlyAll = call.argument<Boolean>("onlyAll")!!
+        if (call.method == Methods.requestPermissionExtend) {
+            resultHandler.reply(PermissionResult.Authorized.value)
+            return
+        }
+        runOnBackground {
+            try {
+                handleMethodResult(call, resultHandler, needLocationPermission)
+            } catch (e: Exception) {
+                val method = call.method
+                val params = call.arguments
+                resultHandler.replyError(
+                    "The $method method has an error: ${e.message}",
+                    e.stackTraceToString(),
+                    params
+                )
+            }
+        }
+    }
 
-                    val list = photoManager.getAssetPathList(type, hasAll, onlyAll, option)
-                    resultHandler.reply(ConvertUtils.convertToGalleryResult(list))
-                }
+    private fun handleMethodResult(
+        call: MethodCall,
+        resultHandler: ResultHandler,
+        needLocationPermission: Boolean
+    ) {
+        when (call.method) {
+            Methods.getAssetPathList -> {
+                val type = call.argument<Int>("type")!!
+                val hasAll = call.argument<Boolean>("hasAll")!!
+                val option = call.getOption()
+                val onlyAll = call.argument<Boolean>("onlyAll")!!
+
+                val list = photoManager.getAssetPathList(type, hasAll, onlyAll, option)
+                resultHandler.reply(ConvertUtils.convertPaths(list))
             }
+
             Methods.getAssetListPaged -> {
-                runOnBackground {
-                    val galleryId = call.argument<String>("id")!!
-                    val type = call.argument<Int>("type")!!
-                    val page = call.argument<Int>("page")!!
-                    val size = call.argument<Int>("size")!!
-                    val option = call.getOption()
-                    val list = photoManager.getAssetListPaged(
-                        galleryId,
-                        type,
-                        page,
-                        size,
-                        option,
-                    )
-                    resultHandler.reply(ConvertUtils.convertToAssetResult(list))
-                }
+                val galleryId = call.argument<String>("id")!!
+                val type = call.argument<Int>("type")!!
+                val page = call.argument<Int>("page")!!
+                val size = call.argument<Int>("size")!!
+                val option = call.getOption()
+                val list =
+                    photoManager.getAssetListPaged(galleryId, type, page, size, option)
+                resultHandler.reply(ConvertUtils.convertAssets(list))
             }
+
             Methods.getAssetListRange -> {
-                runOnBackground {
-                    val galleryId = call.getString("id")
-                    val type = call.getInt("type")
-                    val start = call.getInt("start")
-                    val end = call.getInt("end")
-                    val option = call.getOption()
-                    val list: List<AssetEntity> =
-                        photoManager.getAssetListRange(
-                            galleryId,
-                            type,
-                            start,
-                            end,
-                            option
-                        )
-                    resultHandler.reply(ConvertUtils.convertToAssetResult(list))
-                }
+                val galleryId = call.getString("id")
+                val type = call.getInt("type")
+                val start = call.getInt("start")
+                val end = call.getInt("end")
+                val option = call.getOption()
+                val list: List<AssetEntity> =
+                    photoManager.getAssetListRange(galleryId, type, start, end, option)
+                resultHandler.reply(ConvertUtils.convertAssets(list))
             }
+
             Methods.getThumbnail -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    val optionMap = call.argument<Map<*, *>>("option")!!
-                    val option = ThumbLoadOption.fromMap(optionMap)
-                    photoManager.getThumb(id, option, resultHandler)
-                }
+                val id = call.argument<String>("id")!!
+                val optionMap = call.argument<Map<*, *>>("option")!!
+                val option = ThumbLoadOption.fromMap(optionMap)
+                photoManager.getThumb(id, option, resultHandler)
             }
+
             Methods.requestCacheAssetsThumbnail -> {
-                runOnBackground {
-                    val ids = call.argument<List<String>>("ids")!!
-                    val optionMap = call.argument<Map<*, *>>("option")!!
-                    val option = ThumbLoadOption.fromMap(optionMap)
-                    photoManager.requestCache(ids, option, resultHandler)
-                }
+                val ids = call.argument<List<String>>("ids")!!
+                val optionMap = call.argument<Map<*, *>>("option")!!
+                val option = ThumbLoadOption.fromMap(optionMap)
+                photoManager.requestCache(ids, option, resultHandler)
             }
+
             Methods.cancelCacheRequests -> {
-                runOnBackground {
-                    photoManager.cancelCacheRequests()
-                }
+                photoManager.cancelCacheRequests()
+                resultHandler.reply(null)
             }
+
             Methods.assetExists -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    photoManager.assetExists(id, resultHandler)
-                }
+                val id = call.argument<String>("id")!!
+                photoManager.assetExists(id, resultHandler)
             }
+
             Methods.getFullFile -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    val isOrigin =
-                        if (!needLocationPermission) false else call.argument<Boolean>("isOrigin")!!
-                    photoManager.getFile(id, isOrigin, resultHandler)
-                }
+                val id = call.argument<String>("id")!!
+                val isOrigin =
+                    if (!needLocationPermission) false else call.argument<Boolean>("isOrigin")!!
+                photoManager.getFile(id, isOrigin, resultHandler)
             }
+
             Methods.getOriginBytes -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    photoManager.getOriginBytes(id, resultHandler, needLocationPermission)
-                }
+                val id = call.argument<String>("id")!!
+                photoManager.getOriginBytes(id, resultHandler, needLocationPermission)
             }
+
             Methods.getMediaUrl -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    val type = call.argument<Int>("type")!!
-                    val mediaUri = photoManager.getMediaUri(id, type)
-                    resultHandler.reply(mediaUri)
-                }
+                val id = call.argument<String>("id")!!
+                val type = call.argument<Int>("type")!!
+                val mediaUri = photoManager.getMediaUri(id.toLong(), type)
+                resultHandler.reply(mediaUri)
             }
+
             Methods.fetchEntityProperties -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    val asset = photoManager.fetchEntityProperties(id)
-                    val assetResult = if (asset != null) {
-                        ConvertUtils.convertToAssetResult(asset)
-                    } else {
-                        null
-                    }
-                    resultHandler.reply(assetResult)
+                val id = call.argument<String>("id")!!
+                val asset = photoManager.fetchEntityProperties(id)
+                val assetResult = if (asset != null) {
+                    ConvertUtils.convertAsset(asset)
+                } else {
+                    null
                 }
+                resultHandler.reply(assetResult)
             }
+
             Methods.fetchPathProperties -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    val type = call.argument<Int>("type")!!
-                    val option = call.getOption()
-                    val pathEntity = photoManager.fetchPathProperties(id, type, option)
-                    if (pathEntity != null) {
-                        val mapResult = ConvertUtils.convertToGalleryResult(listOf(pathEntity))
-                        resultHandler.reply(mapResult)
-                    } else {
-                        resultHandler.reply(null)
-                    }
+                val id = call.argument<String>("id")!!
+                val type = call.argument<Int>("type")!!
+                val option = call.getOption()
+                val pathEntity = photoManager.fetchPathProperties(id, type, option)
+                if (pathEntity != null) {
+                    val mapResult = ConvertUtils.convertPaths(listOf(pathEntity))
+                    resultHandler.reply(mapResult)
+                } else {
+                    resultHandler.reply(null)
                 }
             }
+
             Methods.getLatLng -> {
-                runOnBackground {
-                    val id = call.argument<String>("id")!!
-                    // 读取id
-                    val location = photoManager.getLocation(id)
-                    resultHandler.reply(location)
-                }
+                val id = call.argument<String>("id")!!
+                // 读取id
+                val location = photoManager.getLocation(id)
+                resultHandler.reply(location)
             }
+
             Methods.notify -> {
-                runOnBackground {
-                    val notify = call.argument<Boolean>("notify")
-                    if (notify == true) {
-                        notifyChannel.startNotify()
-                    } else {
-                        notifyChannel.stopNotify()
-                    }
+                val notify = call.argument<Boolean>("notify")
+                if (notify == true) {
+                    notifyChannel.startNotify()
+                } else {
+                    notifyChannel.stopNotify()
                 }
+                resultHandler.reply(null)
             }
+
             Methods.saveImage -> {
-                runOnBackground {
-                    try {
-                        val image = call.argument<ByteArray>("image")!!
-                        val title = call.argument<String>("title") ?: ""
-                        val desc = call.argument<String>("desc") ?: ""
-                        val relativePath = call.argument<String>("relativePath") ?: ""
-                        val entity = photoManager.saveImage(image, title, desc, relativePath)
-                        if (entity == null) {
-                            resultHandler.reply(null)
-                            return@runOnBackground
-                        }
-                        val map = ConvertUtils.convertToAssetResult(entity)
-                        resultHandler.reply(map)
-                    } catch (e: Exception) {
-                        LogUtils.error("save image error", e)
+                try {
+                    val image = call.argument<ByteArray>("image")!!
+                    val title = call.argument<String>("title") ?: ""
+                    val desc = call.argument<String>("desc") ?: ""
+                    val relativePath = call.argument<String>("relativePath") ?: ""
+                    val entity = photoManager.saveImage(image, title, desc, relativePath)
+                    if (entity == null) {
                         resultHandler.reply(null)
+                        return
                     }
+                    val map = ConvertUtils.convertAsset(entity)
+                    resultHandler.reply(map)
+                } catch (e: Exception) {
+                    LogUtils.error("save image error", e)
+                    resultHandler.reply(null)
                 }
             }
+
             Methods.saveImageWithPath -> {
-                runOnBackground {
-                    try {
-                        val imagePath = call.argument<String>("path")!!
-                        val title = call.argument<String>("title") ?: ""
-                        val desc = call.argument<String>("desc") ?: ""
-                        val relativePath = call.argument<String>("relativePath") ?: ""
-                        val entity = photoManager.saveImage(imagePath, title, desc, relativePath)
-                        if (entity == null) {
-                            resultHandler.reply(null)
-                            return@runOnBackground
-                        }
-                        val map = ConvertUtils.convertToAssetResult(entity)
-                        resultHandler.reply(map)
-                    } catch (e: Exception) {
-                        LogUtils.error("save image error", e)
+                try {
+                    val imagePath = call.argument<String>("path")!!
+                    val title = call.argument<String>("title") ?: ""
+                    val desc = call.argument<String>("desc") ?: ""
+                    val relativePath = call.argument<String>("relativePath") ?: ""
+                    val entity =
+                        photoManager.saveImage(imagePath, title, desc, relativePath)
+                    if (entity == null) {
                         resultHandler.reply(null)
+                        return
                     }
+                    val map = ConvertUtils.convertAsset(entity)
+                    resultHandler.reply(map)
+                } catch (e: Exception) {
+                    LogUtils.error("save image error", e)
+                    resultHandler.reply(null)
                 }
             }
+
             Methods.saveVideo -> {
-                runOnBackground {
-                    try {
-                        val videoPath = call.argument<String>("path")!!
-                        val title = call.argument<String>("title")!!
-                        val desc = call.argument<String>("desc") ?: ""
-                        val relativePath = call.argument<String>("relativePath") ?: ""
-                        val entity = photoManager.saveVideo(videoPath, title, desc, relativePath)
-                        if (entity == null) {
-                            resultHandler.reply(null)
-                            return@runOnBackground
-                        }
-                        val map = ConvertUtils.convertToAssetResult(entity)
-                        resultHandler.reply(map)
-                    } catch (e: Exception) {
-                        LogUtils.error("save video error", e)
+                try {
+                    val videoPath = call.argument<String>("path")!!
+                    val title = call.argument<String>("title")!!
+                    val desc = call.argument<String>("desc") ?: ""
+                    val relativePath = call.argument<String>("relativePath") ?: ""
+                    val entity =
+                        photoManager.saveVideo(videoPath, title, desc, relativePath)
+                    if (entity == null) {
                         resultHandler.reply(null)
+                        return
                     }
+                    val map = ConvertUtils.convertAsset(entity)
+                    resultHandler.reply(map)
+                } catch (e: Exception) {
+                    LogUtils.error("save video error", e)
+                    resultHandler.reply(null)
                 }
             }
+
             Methods.copyAsset -> {
-                runOnBackground {
-                    val assetId = call.argument<String>("assetId")!!
-                    val galleryId = call.argument<String>("galleryId")!!
-                    photoManager.copyToGallery(assetId, galleryId, resultHandler)
-                }
+                val assetId = call.argument<String>("assetId")!!
+                val galleryId = call.argument<String>("galleryId")!!
+                photoManager.copyToGallery(assetId, galleryId, resultHandler)
             }
+
             Methods.moveAssetToPath -> {
-                runOnBackground {
-                    val assetId = call.argument<String>("assetId")!!
-                    val albumId = call.argument<String>("albumId")!!
-                    photoManager.moveToGallery(assetId, albumId, resultHandler)
-                }
+                val assetId = call.argument<String>("assetId")!!
+                val albumId = call.argument<String>("albumId")!!
+                photoManager.moveToGallery(assetId, albumId, resultHandler)
             }
+
             Methods.deleteWithIds -> {
-                runOnBackground {
-                    try {
-                        val ids = call.argument<List<String>>("ids")!!
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            val uris = ids.map { photoManager.getUri(it) }.toList()
-                            deleteManager.deleteInApi30(uris, resultHandler)
-                        } else {
-                            deleteManager.deleteInApi28(ids)
-                            resultHandler.reply(ids)
-                        }
-                    } catch (e: Exception) {
-                        LogUtils.error("deleteWithIds failed", e)
-                        resultHandler.replyError("deleteWithIds failed")
+                try {
+                    val ids = call.argument<List<String>>("ids")!!
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val uris = ids.map { photoManager.getUri(it) }.toList()
+                        deleteManager.deleteInApi30(uris, resultHandler)
+                    } else {
+                        deleteManager.deleteInApi28(ids)
+                        resultHandler.reply(ids)
                     }
+                } catch (e: Exception) {
+                    LogUtils.error("deleteWithIds failed", e)
+                    resultHandler.replyError("deleteWithIds failed")
                 }
             }
+
             Methods.removeNoExistsAssets -> {
-                runOnBackground {
-                    photoManager.removeAllExistsAssets(resultHandler)
-                }
+                photoManager.removeAllExistsAssets(resultHandler)
             }
+
+            Methods.getColumnNames -> {
+                photoManager.getColumnNames(resultHandler)
+            }
+
+            Methods.getAssetCount -> {
+                val option = call.getOption()
+                val type = call.getInt("type")
+                photoManager.getAssetCount(resultHandler, option, type)
+            }
+
+            Methods.getAssetsByRange -> {
+                val option = call.getOption()
+                val start = call.getInt("start")
+                val end = call.getInt("end")
+                val type = call.getInt("type")
+                photoManager.getAssetsByRange(resultHandler, option, start, end, type)
+            }
+
             else -> resultHandler.notImplemented()
         }
     }
@@ -485,6 +503,6 @@ class PhotoManagerPlugin(
 
     private fun MethodCall.getOption(): FilterOption {
         val arguments = argument<Map<*, *>>("option")!!
-        return ConvertUtils.convertFilterOptionsFromMap(arguments)
+        return ConvertUtils.convertToFilterOptions(arguments)
     }
 }

@@ -180,6 +180,7 @@ class PhotoProvider extends ChangeNotifier {
         hasAll: hasAll,
         onlyAll: onlyAll,
         filterOption: option,
+        pathFilterOption: pathFilterOption,
       ),
       prefix: 'Obtain path list duration',
     );
@@ -244,6 +245,38 @@ class PhotoProvider extends ChangeNotifier {
       thumbFormat = ThumbnailFormat.jpeg;
     }
   }
+
+  /// For path filter option
+  var _pathFilterOption = const PMPathFilter();
+  PMPathFilter get pathFilterOption => _pathFilterOption;
+  List<PMDarwinAssetCollectionType> _pathTypeList = PMDarwinAssetCollectionType.values;
+
+  List<PMDarwinAssetCollectionType> get pathTypeList => _pathTypeList;
+
+  set pathTypeList(List<PMDarwinAssetCollectionType> value) {
+    _pathTypeList = value;
+    _onChangePathFilter();
+  }
+
+  late List<PMDarwinAssetCollectionSubtype> _pathSubTypeList = _pathFilterOption.darwin.subType;
+
+  List<PMDarwinAssetCollectionSubtype> get pathSubTypeList => _pathSubTypeList;
+
+  set pathSubTypeList(List<PMDarwinAssetCollectionSubtype> value) {
+    _pathSubTypeList = value;
+    _onChangePathFilter();
+  }
+
+  void _onChangePathFilter() {
+    final darwinPathFilterOption = PMDarwinPathFilter(
+      type: pathTypeList,
+      subType: pathSubTypeList,
+    );
+    _pathFilterOption = PMPathFilter(
+      darwin: darwinPathFilterOption,
+    );
+    notifyListeners();
+  }
 }
 
 class AssetPathProvider extends ChangeNotifier {
@@ -303,6 +336,10 @@ class AssetPathProvider extends ChangeNotifier {
       path.getAssetListPaged(page: page + 1, size: loadCount),
       prefix: 'Load more assets list from path ${path.id}',
     );
+    if (list.isEmpty) {
+      Log.e('load error');
+      return;
+    }
     page = page + 1;
     this.list.addAll(list);
     notifyListeners();
@@ -334,7 +371,7 @@ class AssetPathProvider extends ChangeNotifier {
   }
 
   Future<void> removeInAlbum(AssetEntity entity) async {
-    if (await PhotoManager.editor.iOS.removeInAlbum(entity, path)) {
+    if (await PhotoManager.editor.darwin.removeInAlbum(entity, path)) {
       final int rangeEnd = this.list.length;
       await provider.refreshAllGalleryProperties();
       final List<AssetEntity> list = await elapsedFuture(

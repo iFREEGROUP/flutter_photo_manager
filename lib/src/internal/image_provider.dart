@@ -3,7 +3,7 @@
 // in the LICENSE file.
 
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:typed_data' as typed_data;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -25,6 +25,13 @@ import 'enums.dart';
 ///   * Fetch [AssetEntity.originBytes] for images.
 /// Else, fetch [AssetEntity.thumbnailDataWithOption] with the given
 /// [thumbnailSize] and the [thumbnailFormat].
+///
+/// {@template remove_in_3_0}
+/// ***
+/// Because the Flutter version changes, there will be compatibility issues.
+/// This class is expected to be removed in 3.0 and become a separate package.
+/// ***
+/// {@endtemplate}
 @immutable
 class AssetEntityImageProvider extends ImageProvider<AssetEntityImageProvider> {
   const AssetEntityImageProvider(
@@ -58,7 +65,7 @@ class AssetEntityImageProvider extends ImageProvider<AssetEntityImageProvider> {
   @override
   ImageStreamCompleter load(
     AssetEntityImageProvider key,
-    DecoderCallback decode,
+    DecoderCallback decode, // ignore: deprecated_member_use
   ) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key, decode),
@@ -83,7 +90,7 @@ class AssetEntityImageProvider extends ImageProvider<AssetEntityImageProvider> {
 
   Future<ui.Codec> _loadAsync(
     AssetEntityImageProvider key,
-    DecoderCallback decode,
+    DecoderCallback decode, // ignore: deprecated_member_use
   ) async {
     try {
       assert(key == this);
@@ -103,7 +110,7 @@ class AssetEntityImageProvider extends ImageProvider<AssetEntityImageProvider> {
         type = key.imageFileType;
       }
 
-      Uint8List? data;
+      typed_data.Uint8List? data;
       if (isOriginal) {
         if (key.entity.type == AssetType.video) {
           data = await key.entity.thumbnailData;
@@ -204,17 +211,18 @@ class AssetEntityImageProvider extends ImageProvider<AssetEntityImageProvider> {
   }
 
   @override
-  int get hashCode => hashValues(
-        entity,
-        isOriginal,
-        thumbnailSize,
-        thumbnailFormat,
-      );
+  int get hashCode =>
+      entity.hashCode ^
+      isOriginal.hashCode ^
+      thumbnailSize.hashCode ^
+      thumbnailFormat.hashCode;
 }
 
 /// A widget that displays an [AssetEntity] image.
 ///
 /// The widget uses [AssetEntityImageProvider] internally to resolve assets.
+///
+/// {@macro remove_in_3_0}
 class AssetEntityImage extends Image {
   AssetEntityImage(
     this.entity, {

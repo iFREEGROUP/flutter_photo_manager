@@ -3,12 +3,14 @@
 // in the LICENSE file.
 
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:typed_data' as typed_data;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
-import '../filter/filter_option_group.dart';
+import '../filter/base_filter.dart';
+import '../filter/classical/filter_option_group.dart';
+import '../filter/path_filter.dart';
 import '../internal/constants.dart';
 import '../internal/editor.dart';
 import '../internal/enums.dart';
@@ -32,7 +34,9 @@ class AssetPathEntity {
     this.lastModified,
     this.type = RequestType.common,
     this.isAll = false,
-    FilterOptionGroup? filterOption,
+    PMFilter? filterOption,
+    this.darwinSubtype,
+    this.darwinType,
   }) : filterOption = filterOption ??= FilterOptionGroup();
 
   /// Obtain an entity from ID.
@@ -99,29 +103,42 @@ class AssetPathEntity {
   final bool isAll;
 
   /// The collection of filter options of the album.
-  final FilterOptionGroup filterOption;
+  final PMFilter filterOption;
+
+  /// The darwin collection type, in android, the value is always null.
+  ///
+  /// If the [albumType] is 2, the value will be null.
+  final PMDarwinAssetCollectionType? darwinType;
+
+  /// The darwin collection subtype, in android, the value is always null.
+  ///
+  /// If the [albumType] is 2, the value will be null.
+  final PMDarwinAssetCollectionSubtype? darwinSubtype;
 
   /// Call this method to obtain new path entity.
   static Future<AssetPathEntity> obtainPathFromProperties({
     required String id,
     int albumType = 1,
     RequestType type = RequestType.common,
-    FilterOptionGroup? optionGroup,
+    PMFilter? optionGroup,
     bool maxDateTimeToNow = true,
   }) async {
     optionGroup ??= FilterOptionGroup();
     final StateError error = StateError(
       'Unable to fetch properties for path $id.',
     );
+
     if (maxDateTimeToNow) {
-      optionGroup = optionGroup.copyWith(
-        createTimeCond: optionGroup.createTimeCond.copyWith(
-          max: DateTime.now(),
-        ),
-        updateTimeCond: optionGroup.updateTimeCond.copyWith(
-          max: DateTime.now(),
-        ),
-      );
+      if (optionGroup is FilterOptionGroup) {
+        optionGroup = optionGroup.copyWith(
+          createTimeCond: optionGroup.createTimeCond.copyWith(
+            max: DateTime.now(),
+          ),
+          updateTimeCond: optionGroup.updateTimeCond.copyWith(
+            max: DateTime.now(),
+          ),
+        );
+      }
     } else {
       optionGroup = optionGroup;
     }
@@ -139,7 +156,7 @@ class AssetPathEntity {
       return ConvertUtils.convertToPathList(
         result.cast<String, dynamic>(),
         type: type,
-        optionGroup: optionGroup,
+        filterOption: optionGroup,
       ).first;
     }
     throw error;
@@ -167,11 +184,16 @@ class AssetPathEntity {
   }) {
     assert(albumType == 1, 'Only album can request for assets.');
     assert(size > 0, 'Page size must be greater than 0.');
-    assert(
-      type == RequestType.image || !filterOption.onlyLivePhotos,
-      'Filtering only Live Photos is only supported '
-      'when the request type contains image.',
-    );
+
+    final filterOption = this.filterOption;
+
+    if (filterOption is FilterOptionGroup) {
+      assert(
+        type == RequestType.image || !filterOption.onlyLivePhotos,
+        'Filtering only Live Photos is only supported '
+        'when the request type contains image.',
+      );
+    }
     return plugin.getAssetListPaged(
       id,
       page: page,
@@ -193,11 +215,15 @@ class AssetPathEntity {
     assert(albumType == 1, 'Only album can request for assets.');
     assert(start >= 0, 'The start must be greater than 0.');
     assert(end > start, 'The end must be greater than start.');
-    assert(
-      type == RequestType.image || !filterOption.onlyLivePhotos,
-      'Filtering only Live Photos is only supported '
-      'when the request type contains image.',
-    );
+    final filterOption = this.filterOption;
+
+    if (filterOption is FilterOptionGroup) {
+      assert(
+        type == RequestType.image || !filterOption.onlyLivePhotos,
+        'Filtering only Live Photos is only supported '
+        'when the request type contains image.',
+      );
+    }
     final int count = await assetCountAsync;
     if (end > count) {
       end = count;
@@ -239,7 +265,7 @@ class AssetPathEntity {
       return ConvertUtils.convertToPathList(
         result.cast<String, dynamic>(),
         type: type,
-        optionGroup: filterOptionGroup ?? filterOption,
+        filterOption: filterOptionGroup ?? filterOption,
       ).first;
     }
     return null;
@@ -252,7 +278,9 @@ class AssetPathEntity {
     DateTime? lastModified,
     RequestType? type,
     bool? isAll,
-    FilterOptionGroup? filterOption,
+    PMFilter? filterOption,
+    PMDarwinAssetCollectionType? darwinType,
+    PMDarwinAssetCollectionSubtype? darwinSubtype,
   }) {
     return AssetPathEntity(
       id: id ?? this.id,
@@ -262,6 +290,8 @@ class AssetPathEntity {
       type: type ?? this.type,
       isAll: isAll ?? this.isAll,
       filterOption: filterOption ?? this.filterOption,
+      darwinSubtype: darwinSubtype ?? this.darwinSubtype,
+      darwinType: darwinType ?? this.darwinType,
     );
   }
 
@@ -280,7 +310,12 @@ class AssetPathEntity {
 
   @override
   int get hashCode =>
-      hashValues(id, name, albumType, type, lastModified, isAll);
+      id.hashCode ^
+      name.hashCode ^
+      albumType.hashCode ^
+      type.hashCode ^
+      lastModified.hashCode ^
+      isAll.hashCode;
 
   @override
   String toString() {
@@ -373,7 +408,7 @@ class AssetEntity {
   final int subtype;
 
   /// Whether the asset is a live photo. Only valid on iOS/macOS.
-  bool get isLivePhoto => subtype == 8;
+  bool get isLivePhoto => subtype & _livePhotosType == _livePhotosType;
 
   /// The type value of the [type].
   final int typeInt;
@@ -515,7 +550,7 @@ class AssetEntity {
   ///
   /// **Use it with cautious** since the original data might be epic large.
   /// Generally use this method only for images.
-  Future<Uint8List?> get originBytes => _getOriginBytes();
+  Future<typed_data.Uint8List?> get originBytes => _getOriginBytes();
 
   /// Obtain the thumbnail data with [PMConstants.vDefaultThumbnailSize]
   /// size of the asset, typically use it for preview displays.
@@ -527,7 +562,7 @@ class AssetEntity {
   /// See also:
   ///  * [thumbnailDataWithSize] which is a common method to obtain thumbnails.
   ///  * [thumbnailDataWithOption] which accepts customized [ThumbnailOption].
-  Future<Uint8List?> get thumbnailData => thumbnailDataWithSize(
+  Future<typed_data.Uint8List?> get thumbnailData => thumbnailDataWithSize(
         const ThumbnailSize.square(PMConstants.vDefaultThumbnailSize),
       );
 
@@ -538,11 +573,12 @@ class AssetEntity {
   /// See also:
   ///  * [thumbnailData] which obtain the thumbnail data with fixed size.
   ///  * [thumbnailDataWithOption] which accepts customized [ThumbnailOption].
-  Future<Uint8List?> thumbnailDataWithSize(
+  Future<typed_data.Uint8List?> thumbnailDataWithSize(
     ThumbnailSize size, {
     ThumbnailFormat format = ThumbnailFormat.jpeg,
     int quality = 100,
     PMProgressHandler? progressHandler,
+    int frame = 0,
   }) {
     assert(() {
       _checkThumbnailAssertion();
@@ -550,7 +586,7 @@ class AssetEntity {
     }());
     // Return null if the asset is audio or others.
     if (type == AssetType.audio || type == AssetType.other) {
-      return Future<Uint8List?>.value();
+      return Future<typed_data.Uint8List?>.value();
     }
     final ThumbnailOption option;
     if (Platform.isIOS || Platform.isMacOS) {
@@ -564,6 +600,7 @@ class AssetEntity {
         size: size,
         format: format,
         quality: quality,
+        frame: frame,
       );
     }
     assert(() {
@@ -579,7 +616,7 @@ class AssetEntity {
   /// See also:
   ///  * [thumbnailData] which obtain the thumbnail data with fixed size.
   ///  * [thumbnailDataWithSize] which is a common method to obtain thumbnails.
-  Future<Uint8List?> thumbnailDataWithOption(
+  Future<typed_data.Uint8List?> thumbnailDataWithOption(
     ThumbnailOption option, {
     PMProgressHandler? progressHandler,
   }) {
@@ -589,7 +626,7 @@ class AssetEntity {
     }());
     // Return null if the asset is audio or others.
     if (type == AssetType.audio || type == AssetType.other) {
-      return Future<Uint8List?>.value();
+      return Future<typed_data.Uint8List?>.value();
     }
     assert(() {
       option.checkAssertions();
@@ -684,7 +721,7 @@ class AssetEntity {
     return File(path);
   }
 
-  Future<Uint8List?> _getOriginBytes({
+  Future<typed_data.Uint8List?> _getOriginBytes({
     PMProgressHandler? progressHandler,
   }) async {
     assert(
@@ -783,7 +820,7 @@ class AssetEntity {
   }
 
   @override
-  int get hashCode => hashValues(id, isFavorite);
+  int get hashCode => id.hashCode ^ isFavorite.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -797,16 +834,17 @@ class AssetEntity {
   String toString() => 'AssetEntity(id: $id , type: $type)';
 }
 
-/// Longitude and latitude.
+/// Represents a geographical location as a latitude-longitude pair.
 @immutable
 class LatLng {
+  /// Creates a new [LatLng] object with the given latitude and longitude.
   const LatLng({this.latitude, this.longitude});
 
+  /// The latitude of this location in degrees.
   final double? latitude;
-  final double? longitude;
 
-  @override
-  int get hashCode => hashValues(latitude, longitude);
+  /// The longitude of this location in degrees.
+  final double? longitude;
 
   @override
   bool operator ==(Object other) {
@@ -815,4 +853,10 @@ class LatLng {
     }
     return latitude == other.latitude && longitude == other.longitude;
   }
+
+  @override
+  int get hashCode => latitude.hashCode ^ longitude.hashCode;
 }
+
+/// The subtype value for Live Photos.
+const int _livePhotosType = 1 << 3;

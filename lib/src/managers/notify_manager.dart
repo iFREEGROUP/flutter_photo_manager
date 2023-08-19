@@ -4,39 +4,46 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' as foundation;
 import 'package:flutter/services.dart';
 
 import '../internal/constants.dart';
 import '../internal/plugin.dart';
 
-/// The notify manager when assets changed.
+/// The manager for receiving notifications when assets change.
+///
+/// This class provides methods for starting and stopping asset change notifications, as well as adding and removing callbacks to be executed upon changes. It also exposes a [Stream] of boolean values that can be used to track whether notifications are currently enabled or disabled.
 class NotifyManager {
-  static const MethodChannel _channel = MethodChannel(
-    '${PMConstants.channelPrefix}/notify',
-  );
-
+  /// The method channel used to communicate with the native platform.
+  static const _channel = MethodChannel('${PMConstants.channelPrefix}/notify');
+/// Returns a [Stream] that emits a boolean value indicating whether asset change notifications are currently enabled.
   Stream<bool> get notifyStream => _controller.stream;
-  final StreamController<bool> _controller = StreamController<bool>.broadcast();
+  /// The stream controller used to manage the [notifyStream].
+  final _controller = StreamController<bool>.broadcast();
 
-  final List<ValueChanged<MethodCall>> _notifyCallback =
-      <ValueChanged<MethodCall>>[];
+/// The list of callback functions to be executed upon asset changes.
+  final _notifyCallback = <foundation.ValueChanged<MethodCall>>[];
 
   /// {@template photo_manager.NotifyManager.addChangeCallback}
-  /// Add a callback for assets changing.
+  /// Adds a callback function to be executed upon asset changes.
+  ///
+  /// * [c]: A required parameter. The function to be executed upon asset changes.
   /// {@endtemplate}
-  void addChangeCallback(ValueChanged<MethodCall> c) => _notifyCallback.add(c);
+  void addChangeCallback(foundation.ValueChanged<MethodCall> c) =>
+      _notifyCallback.add(c);
 
   /// {@template photo_manager.NotifyManager.removeChangeCallback}
-  /// Remove the callback for assets changing.
+  /// Removes a callback function from the list to be executed upon asset changes.
+  ///
+  /// * [c]: A required parameter. The function to remove.
   /// {@endtemplate}
-  void removeChangeCallback(ValueChanged<MethodCall> c) =>
+  void removeChangeCallback(foundation.ValueChanged<MethodCall> c) =>
       _notifyCallback.remove(c);
 
   /// {@template photo_manager.NotifyManager.startChangeNotify}
-  /// Enable notifications for assets changing.
+  /// Enables asset change notifications.
   ///
-  /// Make sure you've added a callback for changes.
+  /// Make sure you've added at least one callback function for changes.
   /// {@endtemplate}
   Future<bool> startChangeNotify() async {
     final bool result = await plugin.notifyChange(start: true);
@@ -48,9 +55,10 @@ class NotifyManager {
   }
 
   /// {@template photo_manager.NotifyManager.stopChangeNotify}
-  /// Disable notifications for assets changing.
+  
+  /// Disables asset change notifications.
   ///
-  /// Remember to remove callbacks for changes.
+  /// Remember to remove all callback functions for changes.
   /// {@endtemplate}
   Future<bool> stopChangeNotify() async {
     final bool result = await plugin.notifyChange(start: false);
@@ -61,6 +69,7 @@ class NotifyManager {
     return result;
   }
 
+  /// The handler function for incoming method calls from the native platform.
   Future<dynamic> _notify(MethodCall call) async {
     if (call.method == 'change') {
       _onChange(call);
@@ -70,8 +79,9 @@ class NotifyManager {
     return 1;
   }
 
+  /// Executes all registered callback functions upon receipt of an asset change notification.
   Future<dynamic> _onChange(MethodCall m) async {
-    _notifyCallback.toList().forEach((ValueChanged<MethodCall> c) => c.call(m));
+    _notifyCallback.toList().forEach((c) => c.call(m));
   }
 
   @override

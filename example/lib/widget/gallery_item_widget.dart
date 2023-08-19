@@ -20,6 +20,7 @@ class GalleryItemWidget extends StatelessWidget {
   final ValueSetter<VoidCallback> setState;
 
   Widget buildGalleryItemWidget(AssetPathEntity item, BuildContext context) {
+    final navigator = Navigator.of(context);
     return GestureDetector(
       child: ListTile(
         title: Text(item.name),
@@ -43,7 +44,7 @@ class GalleryItemWidget extends StatelessWidget {
           showToast('The asset count is 0.');
           return;
         }
-        Navigator.of(context).push<void>(
+        navigator.push<void>(
           MaterialPageRoute<void>(
             builder: (_) => GalleryContentListPage(
               path: item,
@@ -63,13 +64,30 @@ class GalleryItemWidget extends StatelessWidget {
                     showToast('The function only support iOS.');
                     return;
                   }
-                  PhotoManager.editor.iOS.deletePath(path);
+                  PhotoManager.editor.darwin.deletePath(path);
                 },
               ),
               ElevatedButton(
                 child: const Text('Show modified date'),
                 onPressed: () async {
                   showToast('modified date = ${item.lastModified}');
+                },
+              ),
+              ElevatedButton(
+                child: const Text('Show properties for PathEntity in console.'),
+                onPressed: () async {
+                  String buffer = '';
+
+                  buffer += 'name = ${item.name}\n';
+                  buffer += 'type = ${item.type}\n';
+                  buffer += 'isAll = ${item.isAll}\n';
+                  buffer += 'albumType = ${item.albumType}\n';
+                  buffer += 'darwinType = ${item.darwinType}\n';
+                  buffer += 'darwinSubType = ${item.darwinSubtype}\n';
+                  buffer += 'assetCount = ${await item.assetCountAsync}\n';
+                  buffer += 'id = ${item.id}\n';
+
+                  print(buffer);
                 },
               ),
             ],

@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:typed_data' as typed_data;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +22,7 @@ class _SaveMediaExampleState extends State<SaveMediaExample> {
   final String haveExifUrl = 'http://172.16.100.7:2393/IMG_20200107_182905.jpg';
 
   final String videoUrl =
-      'http://img.ksbbs.com/asset/Mon_1703/05cacb4e02f9d9e.mp4';
+      'https://pic.app.kszhuangxiu.com/forum/20220423120218front2_1_788292_FhP_XBo24M5XuZzb4xPb-YPaC6Yq.mp4';
 
   // final videoUrl = "http://192.168.31.252:51781/out.mov";
   // final videoUrl = "http://192.168.31.252:51781/out.ogv";
@@ -56,11 +56,13 @@ class _SaveMediaExampleState extends State<SaveMediaExample> {
     return '$dir/$name.jpg';
   }
 
+  var isNotify = false;
+
   @override
   void initState() {
     super.initState();
-    PhotoManager.addChangeCallback(_onChange);
-    PhotoManager.startChangeNotify();
+    // PhotoManager.addChangeCallback(_onChange);
+    // PhotoManager.startChangeNotify();
   }
 
   void _onChange(MethodCall call) {
@@ -69,8 +71,10 @@ class _SaveMediaExampleState extends State<SaveMediaExample> {
 
   @override
   void dispose() {
-    PhotoManager.stopChangeNotify();
-    PhotoManager.removeChangeCallback(_onChange);
+    if (isNotify) {
+      PhotoManager.stopChangeNotify();
+      PhotoManager.removeChangeCallback(_onChange);
+    }
     super.dispose();
   }
 
@@ -80,23 +84,58 @@ class _SaveMediaExampleState extends State<SaveMediaExample> {
       appBar: AppBar(
         title: const Text('Save media page'),
       ),
-      body: Column(
-        children: <Widget>[
-          ElevatedButton(
-            onPressed: saveImageWithBytes,
-            child: const Text('Save image with bytes'),
-          ),
-          ElevatedButton(
-            onPressed: saveImageWithPath,
-            child: const Text('Save image with path'),
-          ),
-          ElevatedButton(
-            onPressed: saveVideo,
-            child: const Text('Save video'),
-          ),
-        ],
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            CheckboxListTile(
+              value: isNotify,
+              onChanged: (v) {
+                if (v == null) {
+                  return;
+                }
+                if (v) {
+                  PhotoManager.addChangeCallback(_onChange);
+                  PhotoManager.startChangeNotify();
+                } else {
+                  PhotoManager.stopChangeNotify();
+                  PhotoManager.removeChangeCallback(_onChange);
+                }
+                setState(() {
+                  isNotify = v;
+                });
+              },
+              title: const Text('Change notify'),
+            ),
+            ElevatedButton(
+              onPressed: saveImageWithBytes,
+              child: const Text('Save image with bytes'),
+            ),
+            ElevatedButton(
+              onPressed: saveImageWithPath,
+              child: const Text('Save image with path'),
+            ),
+            ElevatedButton(
+              onPressed: saveVideo,
+              child: const Text('Save video'),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> checkRequest(void Function() onAuth) async {
+    final state = await PhotoManager.requestPermissionExtend(
+        requestOption: const PermissionRequestOption(
+      iosAccessLevel: IosAccessLevel.addOnly,
+    ));
+    Log.d('state.isAuth: ${state.isAuth}');
+    if (!state.isAuth) {
+      return;
+    }
+    onAuth();
   }
 
   Future<void> saveVideo() async {
@@ -114,10 +153,11 @@ class _SaveMediaExampleState extends State<SaveMediaExample> {
     resp.listen((List<int> data) {
       file.writeAsBytesSync(data, mode: FileMode.append);
     }, onDone: () async {
-      Log.d('file path = ${file.lengthSync()}');
-      final AssetEntity? asset =
-          await PhotoManager.editor.saveVideo(file, title: name);
-      Log.d('saved asset: $asset');
+      await checkRequest(() async {
+        final AssetEntity? asset =
+            await PhotoManager.editor.saveVideo(file, title: name);
+        Log.d('saved asset: $asset');
+      });
       client.close();
     });
   }
@@ -129,19 +169,24 @@ class _SaveMediaExampleState extends State<SaveMediaExample> {
     final List<int> bytes = <int>[];
     resp.listen((List<int> data) {
       bytes.addAll(data);
-    }, onDone: () {
-      final Uint8List image = Uint8List.fromList(bytes);
-      saveImage(image);
+    }, onDone: () async {
+      await checkRequest(() async {
+        final image = typed_data.Uint8List.fromList(bytes);
+        saveImage(image);
+      });
+
       client.close();
     });
   }
 
-  Future<void> saveImage(Uint8List uint8List) async {
-    final AssetEntity? asset = await PhotoManager.editor.saveImage(
-      uint8List,
-      title: '${DateTime.now().millisecondsSinceEpoch}.jpg',
-    );
-    Log.d('saved asset: $asset');
+  Future<void> saveImage(typed_data.Uint8List uint8List) async {
+    await checkRequest(() async {
+      final AssetEntity? asset = await PhotoManager.editor.saveImage(
+        uint8List,
+        title: '${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      Log.d('saved asset: $asset');
+    });
   }
 
   Future<void> saveImageWithPath() async {
@@ -155,11 +200,13 @@ class _SaveMediaExampleState extends State<SaveMediaExample> {
       file.writeAsBytesSync(data, mode: FileMode.append);
     }, onDone: () async {
       Log.d('write image to file success: $file');
-      final AssetEntity? asset = await PhotoManager.editor.saveImageWithPath(
-        file.path,
-        title: '${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      Log.d('saved asset: $asset');
+      await checkRequest(() async {
+        final AssetEntity? asset = await PhotoManager.editor.saveImageWithPath(
+          file.path,
+          title: '${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        Log.d('saved asset: $asset');
+      });
       client.close();
     });
   }

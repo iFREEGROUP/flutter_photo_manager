@@ -4,21 +4,117 @@ that can be found in the LICENSE file. -->
 
 # CHANGELOG
 
-## 2.2.0-dev.2
-
-### Improvements
-
-- Improve assets change notify with better methods signature and checks. (#790)
-- Add `PermissionState.hasAccess` getter for better condition judgement. (#792)
-- Remove unnecessary assets fetch in `getMediaUrl` on iOS. (#793)
-- Improve `AssetEntity.obtainForNewProperties` on iOS. (#794)
+## 2.7.1
 
 ### Fixes
 
-- Purpose video creation correctly on iOS. (#791)
-- Mark assets as favorite on iOS. (#794)
+- Fix namespace on Android.
+- Remove the package definition from the manifest.
+- Use `math.pow(2^63)-1` to make Web compile work again.
+- Fix the `end` argument of `PhotoManager.getAssetListRange` is being handled incorrectly on Darwin. (#962)
 
-## 2.2.0-dev.1
+## 2.7.0
+
+### Features
+
+- Support `darwinType` and `darwinSubType` in `AssetPathEntity` on iOS and macOS. (#950)
+
+### Improvements
+
+- Roll dependencies on Android. (#933)
+
+### Fixes
+
+- Fix filter option group. (#919)
+- Fix `originFileWithSubtype` and `fileWithSubtype` for livePhoto.
+- Fix: support only add permission for iOS/macOS. (#944)
+- Fix: modified the output path for iOS(add id in next path).
+- Fix: Fixed a possible problem with the permission for darwin.
+- Fix: `needTitle` for `CustomFilter`.
+
+## 2.6.0
+
+### Features
+
+- Support `CustomFilter` for more filter options. (#901)
+- Add two new static methods for `PhotoManager`:
+  - `getAssetCount` for getting assets count.
+  - `getAssetListRange` for getting assets between start and end.
+  
+## 2.5.2
+
+### Improvements
+
+- Reply errors when thumbnails are failed to load on Android. (#883)
+
+## 2.5.1+1
+
+### Fixes
+
+- Fix pending permissions request on Android. (#879)
+
+## 2.5.1
+
+### Improvements
+
+- Always declare `READ_EXTERNAL_STORAGE` permission on Android. (#874)
+- Upgrade Glide and Kotlin libraries version. (#872)
+- Avoid using file-based saving methods on Android. (#871)
+- Use `ContentUris` for retrieving Media URIs on Android. (#870)
+- Improve media subtype on iOS. (#863)
+
+## 2.5.0
+
+### Features
+
+- Support saving Live Photos on iOS and macOS. (#851)
+- Introduce `DarwinEditor` to replace `IosEditor`. (#855)
+
+## 2.4.2
+
+### Improvements
+
+- Expose `frame` for `AssetEntity.thumbnailDataWithSize`. (#850)
+
+## 2.4.1
+
+### Improvements
+
+- Use last modified date for Glide caches key on Android. (#848)
+
+## 2.4.0
+
+### Features
+
+- Support both legacy and scoped storage on Android. (#833)
+
+### Fixes
+
+- Avoid duplicate `copyItemAtURL` for videos on iOS. (#840)
+- Correct permission checks with `requestPermissionExtend` on Android 13. (#843)
+
+## 2.3.0
+
+### Features
+
+- Support Android 13 (API 33) permissions.
+
+### Improvements
+
+- Adapt Flutter 3.3. (#820)
+- Retrieve metadata for videos when empty on Android. (#819)
+
+### Fixes
+
+- Fix saving videos with path on Android 29-. (#829)
+
+## 2.2.1
+
+### Fixes
+
+- Fix saving images with path on Android 29-. (#815)
+
+## 2.2.0
 
 ### Breaking changes
 
@@ -26,6 +122,24 @@ that can be found in the LICENSE file. -->
   which improves the speed when loading paths mainly on iOS, also:
   - Deprecate `AssetPathEntity.assetCount`.
   - Remove `FilterOptionGroup.containsEmptyAlbum`.
+
+### Improvements
+
+- Improve assets change notify with better methods signature and checks. (#790)
+- Add `PermissionState.hasAccess` getter for better condition judgement. (#792)
+- Remove unnecessary assets fetch in `getMediaUrl` on iOS. (#793)
+- Improve `AssetEntity.obtainForNewProperties` on iOS. (#794)
+- Improve `MD5Utils` on iOS. (#802)
+- Improve cache container mutations on iOS. (#803)
+- Improve assets count assignments. (#804)
+- Improve cursors conversion on Android. (#806)
+
+### Fixes
+
+- Purpose video creation correctly on iOS. (#791)
+- Mark assets as favorite on iOS. (#794)
+- Fix not replied method calls (#800).
+- Fix invalid `RELATIVE_PATH` obtains with cursors on Android Q-. (#810)
 
 ## 2.1.4
 
@@ -431,7 +545,7 @@ and applied multiple ### Fixes which make this plugin as the most solid ever.
   but at the same time user have to bear the risks corresponding to the permission).
 - Support clean file cache.
 - Experimental
-    - Preload image (Use `PhotoCachingManager` api.)
+  - Preload image (Use `PhotoCachingManager` api.)
 - Add `OrderOption` as sort condition. The option default value is order by create date desc;
 - Support icloud asset progress.
 
@@ -494,14 +608,14 @@ and applied multiple ### Fixes which make this plugin as the most solid ever.
 - Create AssetEntity with id.
 - Create AssetPathEntity from id.
 - Only iOS
-    - Create folder or album.
-    - Remove assets in album.
-    - Delete folder or album.
-    - Favorite asset.
+  - Create folder or album.
+  - Remove assets in album.
+  - Delete folder or album.
+  - Favorite asset.
 - Only android
-    - move asset to another path.
-    - Remove all non-existing rows.
-    - add `relativePath` for android.
+  - move asset to another path.
+  - Remove all non-existing rows.
+  - add `relativePath` for android.
 
 ### Improvements
 
@@ -523,6 +637,7 @@ and applied multiple ### Fixes which make this plugin as the most solid ever.
 ## 0.5.0
 
 ### Breaking changes
+
 - Add date condition to filter datetime
 - Add class `DateTimeCond`
 - Add `dateTimeCond` to `FilterOptionGroup`

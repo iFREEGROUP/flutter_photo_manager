@@ -7,29 +7,28 @@
     self = [super init];
     if (self) {
         self.type = PM_TYPE_ALBUM;
+        self.assetCount = NSIntegerMax;
     }
-    
     return self;
 }
 
-
-- (instancetype)initWithId:(NSString *)id name:(NSString *)name {
+- (instancetype)initWithId:(NSString *)id name:(NSString *)name assetCollection:(PHAssetCollection*)collection {
     self = [super init];
     if (self) {
         self.id = id;
         self.name = name;
         self.type = PM_TYPE_ALBUM;
+        self.assetCount = NSIntegerMax;
+        self.collection = collection;
     }
-    
     return self;
 }
 
-+ (instancetype)entityWithId:(NSString *)id name:(NSString *)name {
-    return [[self alloc] initWithId:id name:name];
++ (instancetype)entityWithId:(NSString *)id name:(NSString *)name assetCollection:(PHAssetCollection *)collection {
+    return [[self alloc] initWithId:id name:name assetCollection:collection];
 }
 
 @end
-
 
 @implementation PMAssetEntity {}
 
@@ -44,7 +43,6 @@ duration:(long)duration type:(int)type {
         self.duration = duration;
         self.type = type;
     }
-    
     return self;
 }
 

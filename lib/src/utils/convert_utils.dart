@@ -2,7 +2,9 @@
 // Use of this source code is governed by an Apache license that can be found
 // in the LICENSE file.
 
-import '../filter/filter_option_group.dart';
+import '../filter/base_filter.dart';
+import '../filter/classical/filter_option_group.dart';
+import '../filter/path_filter.dart';
 import '../types/entity.dart';
 import '../types/types.dart';
 
@@ -12,17 +14,21 @@ class ConvertUtils {
   static List<AssetPathEntity> convertToPathList(
     Map<String, dynamic> data, {
     required RequestType type,
-    FilterOptionGroup? optionGroup,
+    PMFilter? filterOption,
   }) {
     final List<AssetPathEntity> result = <AssetPathEntity>[];
     final List<Map<dynamic, dynamic>> list =
         (data['data'] as List<dynamic>).cast<Map<dynamic, dynamic>>();
     for (final Map<dynamic, dynamic> item in list) {
+      // Skip paths with empty assets.
+      if (item['assetCount'] == 0) {
+        continue;
+      }
       result.add(
         convertMapToPath(
           item.cast<String, dynamic>(),
           type: type,
-          optionGroup: optionGroup ?? FilterOptionGroup(),
+          filterOption: filterOption ?? FilterOptionGroup(),
         ),
       );
     }
@@ -42,7 +48,7 @@ class ConvertUtils {
   static AssetPathEntity convertMapToPath(
     Map<String, dynamic> data, {
     required RequestType type,
-    FilterOptionGroup? optionGroup,
+    PMFilter? filterOption,
   }) {
     final int? modified = data['modified'] as int?;
     final DateTime? lastModified = modified != null
@@ -52,12 +58,18 @@ class ConvertUtils {
       id: data['id'] as String,
       name: data['name'] as String,
       // ignore: deprecated_member_use_from_same_package
-      assetCount: data['length'] as int? ?? 0,
+      assetCount: data['assetCount'] as int? ?? 0,
       albumType: data['albumType'] as int? ?? 1,
-      filterOption: optionGroup ?? FilterOptionGroup(),
+      filterOption: filterOption ?? FilterOptionGroup(),
       lastModified: lastModified,
       type: type,
       isAll: data['isAll'] as bool,
+      darwinType: PMDarwinAssetCollectionTypeExt.fromValue(
+        data['darwinAssetCollectionType'],
+      ),
+      darwinSubtype: PMDarwinAssetCollectionSubtypeExt.fromValue(
+        data['darwinAssetCollectionSubtype'],
+      ),
     );
     return result;
   }

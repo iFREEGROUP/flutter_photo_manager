@@ -3,6 +3,7 @@
 // in the LICENSE file.
 
 import '../types/thumbnail.dart';
+import '../types/types.dart';
 
 class PMConstants {
   const PMConstants._();
@@ -14,11 +15,14 @@ class PMConstants {
   static const String mRequestPermissionExtend = 'requestPermissionExtend';
   static const String mPresentLimited = 'presentLimited';
   static const String mFetchEntityProperties = 'fetchEntityProperties';
+  static const String mGetAssetCountFromPath = 'getAssetCountFromPath';
+
+  /// The 4 methods have [RequestType] params, for android-13
   static const String mFetchPathProperties = 'fetchPathProperties';
   static const String mGetAssetPathList = 'getAssetPathList';
-  static const String mGetAssetCountFromPath = 'getAssetCountFromPath';
   static const String mGetAssetListPaged = 'getAssetListPaged';
   static const String mGetAssetListRange = 'getAssetListRange';
+
   static const String mGetThumb = 'getThumb';
   static const String mGetOriginBytes = 'getOriginBytes';
   static const String mGetFullFile = 'getFullFile';
@@ -31,6 +35,7 @@ class PMConstants {
   static const String mSaveImage = 'saveImage';
   static const String mSaveImageWithPath = 'saveImageWithPath';
   static const String mSaveVideo = 'saveVideo';
+  static const String mSaveLivePhoto = 'saveLivePhoto';
   static const String mAssetExists = 'assetExists';
   static const String mSystemVersion = 'systemVersion';
   static const String mGetLatLngAndroidQ = 'getLatLngAndroidQ';
@@ -51,6 +56,10 @@ class PMConstants {
   static const String mCreateFolder = 'createFolder';
   static const String mRemoveInAlbum = 'removeInAlbum';
   static const String mMoveAssetToPath = 'moveAssetToPath';
+  static const String mColumnNames = 'getColumnNames';
+
+  static const String mGetAssetCount = 'getAssetCount';
+  static const String mGetAssetsByRange = 'getAssetsByRange';
 
   /// Constant value.
   static const int vDefaultThumbnailSize = 150;

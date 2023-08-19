@@ -8,8 +8,8 @@ import android.util.Log
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.FutureTarget
 import com.fluttercandies.photo_manager.core.entity.AssetEntity
-import com.fluttercandies.photo_manager.core.entity.FilterOption
-import com.fluttercandies.photo_manager.core.entity.GalleryEntity
+import com.fluttercandies.photo_manager.core.entity.filter.FilterOption
+import com.fluttercandies.photo_manager.core.entity.AssetPathEntity
 import com.fluttercandies.photo_manager.core.entity.ThumbLoadOption
 import com.fluttercandies.photo_manager.core.utils.*
 import com.fluttercandies.photo_manager.thumb.ThumbnailUtil
@@ -39,9 +39,9 @@ class PhotoManager(private val context: Context) {
         hasAll: Boolean,
         onlyAll: Boolean,
         option: FilterOption
-    ): List<GalleryEntity> {
+    ): List<AssetPathEntity> {
         if (onlyAll) {
-            return dbUtils.getOnlyGalleryList(context, type, option)
+            return dbUtils.getMainAssetPathEntity(context, type, option)
         }
         val fromDb = dbUtils.getAssetPathList(context, type, option)
         if (!hasAll) {
@@ -49,11 +49,11 @@ class PhotoManager(private val context: Context) {
         }
         // make is all to the gallery list
         val entity = fromDb.run {
-            var count = 0
+            var assetCount = 0
             for (item in this) {
-                count += item.length
+                assetCount += item.assetCount
             }
-            GalleryEntity(ALL_ID, ALL_ALBUM_NAME, count, type, true)
+            AssetPathEntity(ALL_ID, ALL_ALBUM_NAME, assetCount, type, true)
         }
 
         return listOf(entity) + fromDb
@@ -100,10 +100,9 @@ class PhotoManager(private val context: Context) {
                 resultHandler.replyError("The asset not found!")
                 return
             }
-            val uri = asset.getUri()
             ThumbnailUtil.getThumbnail(
                 context,
-                uri,
+                asset,
                 option.width,
                 option.height,
                 format,
@@ -133,17 +132,12 @@ class PhotoManager(private val context: Context) {
         }
     }
 
-    fun clearCache() {
-        dbUtils.clearCache()
-    }
-
-
     fun clearFileCache() {
         ThumbnailUtil.clearCache(context)
         dbUtils.clearFileCache(context)
     }
 
-    fun fetchPathProperties(id: String, type: Int, option: FilterOption): GalleryEntity? {
+    fun fetchPathProperties(id: String, type: Int, option: FilterOption): AssetPathEntity? {
         if (id == ALL_ID) {
             val allGalleryList = dbUtils.getAssetPathList(context, type, option)
             return if (allGalleryList.isEmpty()) {
@@ -151,11 +145,11 @@ class PhotoManager(private val context: Context) {
             } else {
                 // make is all to the gallery list
                 allGalleryList.run {
-                    var count = 0
+                    var assetCount = 0
                     for (item in this) {
-                        count += item.length
+                        assetCount += item.assetCount
                     }
-                    GalleryEntity(ALL_ID, ALL_ALBUM_NAME, count, type, true).apply {
+                    AssetPathEntity(ALL_ID, ALL_ALBUM_NAME, assetCount, type, true).apply {
                         if (option.containsPathModified) {
                             dbUtils.injectModifiedDate(context, this)
                         }
@@ -163,7 +157,7 @@ class PhotoManager(private val context: Context) {
                 }
             }
         }
-        val galleryEntity = dbUtils.getGalleryEntity(context, id, type, option)
+        val galleryEntity = dbUtils.getAssetPathEntityFromId(context, id, type, option)
         if (galleryEntity != null && option.containsPathModified) {
             dbUtils.injectModifiedDate(context, galleryEntity)
         }
@@ -202,7 +196,7 @@ class PhotoManager(private val context: Context) {
     }
 
     fun assetExists(id: String, resultHandler: ResultHandler) {
-        val exists: Boolean = dbUtils.exists(context, id)
+        val exists: Boolean = dbUtils.assetExists(context, id)
         resultHandler.reply(exists)
     }
 
@@ -216,7 +210,7 @@ class PhotoManager(private val context: Context) {
         }
     }
 
-    fun getMediaUri(id: String, type: Int): String {
+    fun getMediaUri(id: Long, type: Int): String {
         return dbUtils.getMediaUri(context, id, type)
     }
 
@@ -227,7 +221,7 @@ class PhotoManager(private val context: Context) {
                 resultHandler.reply(null)
                 return
             }
-            resultHandler.reply(ConvertUtils.convertToAssetResult(assetEntity))
+            resultHandler.reply(ConvertUtils.convertAsset(assetEntity))
         } catch (e: Exception) {
             LogUtils.error(e)
             resultHandler.reply(null)
@@ -241,7 +235,7 @@ class PhotoManager(private val context: Context) {
                 resultHandler.reply(null)
                 return
             }
-            resultHandler.reply(ConvertUtils.convertToAssetResult(assetEntity))
+            resultHandler.reply(ConvertUtils.convertAsset(assetEntity))
         } catch (e: Exception) {
             LogUtils.error(e)
             resultHandler.reply(null)
@@ -288,5 +282,20 @@ class PhotoManager(private val context: Context) {
         for (futureTarget in needCancelFutures) {
             Glide.with(context).clear(futureTarget)
         }
+    }
+
+    fun getColumnNames(resultHandler: ResultHandler) {
+        val columnNames = dbUtils.getColumnNames(context)
+        resultHandler.reply(columnNames)
+    }
+
+    fun getAssetCount(resultHandler: ResultHandler, option: FilterOption, requestType: Int) {
+        val assetCount = dbUtils.getAssetCount(context, option, requestType)
+        resultHandler.reply(assetCount)
+    }
+
+    fun getAssetsByRange(resultHandler: ResultHandler, option: FilterOption, start: Int, end: Int, requestType: Int) {
+        val list = dbUtils.getAssetsByRange(context, option, start, end, requestType)
+        resultHandler.reply(ConvertUtils.convertAssets(list))
     }
 }

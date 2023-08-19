@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -132,6 +134,7 @@ class _GalleryContentListPageState extends State<GalleryContentListPage> {
       onTap: () => showDialog<void>(
         context: context,
         builder: (_) => ListDialog(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
           children: <Widget>[
             if (entity.type == AssetType.image)
               ElevatedButton(
@@ -144,16 +147,18 @@ class _GalleryContentListPageState extends State<GalleryContentListPage> {
                 Log.d('isLocallyAvailable: $r');
               }),
             ),
-            ElevatedButton(
-              child: const Text('getMediaUrl'),
-              onPressed: () async {
-                final Stopwatch watch = Stopwatch()..start();
-                final String? url = await entity.getMediaUrl();
-                watch.stop();
-                Log.d('Media URL: $url');
-                Log.d(watch.elapsed);
-              },
-            ),
+            if (entity.type == AssetType.video ||
+                entity.type == AssetType.audio)
+              ElevatedButton(
+                child: const Text('getMediaUrl'),
+                onPressed: () async {
+                  final Stopwatch watch = Stopwatch()..start();
+                  final String? url = await entity.getMediaUrl();
+                  watch.stop();
+                  Log.d('Media URL: $url');
+                  Log.d(watch.elapsed);
+                },
+              ),
             ElevatedButton(
               child: const Text('Show detail page'),
               onPressed: () => routeToDetailPage(entity),
@@ -187,13 +192,13 @@ class _GalleryContentListPageState extends State<GalleryContentListPage> {
                 <int>[500, 600, 700, 1000, 1500, 2000],
               ),
             ),
-            if (Platform.isIOS)
+            if (Platform.isIOS || Platform.isMacOS)
               ElevatedButton(
                 child: const Text('Toggle isFavorite'),
                 onPressed: () async {
                   final bool isFavorite = entity.isFavorite;
                   print('Current isFavorite: $isFavorite');
-                  await PhotoManager.editor.iOS.favoriteAsset(
+                  await PhotoManager.editor.darwin.favoriteAsset(
                     entity: entity,
                     favorite: !isFavorite,
                   );
@@ -209,6 +214,13 @@ class _GalleryContentListPageState extends State<GalleryContentListPage> {
                     setState(() {});
                   }
                 },
+              ),
+            if ((Platform.isIOS || Platform.isMacOS) && entity.isLivePhoto)
+              ElevatedButton(
+                onPressed: () {
+                  showLivePhotoInfo(entity);
+                },
+                child: const Text('Show live photo'),
               ),
           ],
         ),
@@ -440,5 +452,13 @@ class _GalleryContentListPageState extends State<GalleryContentListPage> {
         );
       });
     }
+  }
+
+  Future<void> showLivePhotoInfo(AssetEntity entity) async {
+    final fileWithSubtype = await entity.originFile;
+    final originFileWithSubtype = await entity.originFileWithSubtype;
+
+    print('fileWithSubtype = $fileWithSubtype');
+    print('originFileWithSubtype = $originFileWithSubtype');
   }
 }
