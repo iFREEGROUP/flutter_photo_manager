@@ -38,4 +38,8 @@ class CustomOption(private val map: Map<*, *>) : FilterOption() {
         }
         return "( $where )"
     }
+
+    override fun getImageFilterCond(): FilterCond? {
+        return null
+    }
 }

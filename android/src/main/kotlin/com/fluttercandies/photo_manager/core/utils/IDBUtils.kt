@@ -68,8 +68,8 @@ interface IDBUtils {
         }
 
         val typeKeys = arrayOf(
-                MediaStore.Files.FileColumns.MEDIA_TYPE,
-                MediaStore.Images.Media.DISPLAY_NAME
+            MediaStore.Files.FileColumns.MEDIA_TYPE,
+            MediaStore.Images.Media.DISPLAY_NAME
         )
 
         val storeBucketKeys = arrayOf(BUCKET_ID, BUCKET_DISPLAY_NAME)
@@ -88,9 +88,9 @@ interface IDBUtils {
         get() = IDBUtils.allUri
 
     fun getAssetPathList(
-            context: Context,
-            requestType: Int = 0,
-            option: FilterOption
+        context: Context,
+        requestType: Int = 0,
+        option: FilterOption
     ): List<AssetPathEntity>
 
     fun getAssetListPaged(
@@ -155,7 +155,11 @@ interface IDBUtils {
 //        return getDouble(getColumnIndex(columnName))
 //    }
 
-    fun Cursor.toAssetEntity(context: Context, checkIfExists: Boolean = true): AssetEntity? {
+    fun Cursor.toAssetEntity(
+        context: Context,
+        checkIfExists: Boolean = true,
+        needGeo: Boolean,
+    ): AssetEntity? {
         val path = getString(DATA)
         if (checkIfExists && path.isNotBlank() && !File(path).exists()) {
             return null
@@ -181,6 +185,9 @@ interface IDBUtils {
         val relativePath: String? = if (isAboveAndroidQ) {
             getString(RELATIVE_PATH)
         } else null
+        var lat = 0.0
+        var log = 0.0
+        var getGeo = needGeo
         if (width == 0 || height == 0) {
             try {
                 if (type == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE && !mimeType.contains("svg")) {
@@ -189,19 +196,43 @@ interface IDBUtils {
                         ExifInterface(it).apply {
                             width = getAttribute(ExifInterface.TAG_IMAGE_WIDTH)?.toInt() ?: width
                             height = getAttribute(ExifInterface.TAG_IMAGE_LENGTH)?.toInt() ?: height
+                            if (getGeo) {
+                                this.latLong?.apply {
+                                    lat = this[0]
+                                    log = this[1]
+                                }
+                                getGeo = false
+                            }
                         }
                     }
                 } else if (type == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO) {
                     val mmr = MediaMetadataRetriever()
                     mmr.setDataSource(path)
-                    width = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 0
-                    height = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: 0
-                    orientation = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toInt()
-                        ?: orientation
+                    width = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                        ?.toInt() ?: 0
+                    height = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                        ?.toInt() ?: 0
+                    orientation =
+                        mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                            ?.toInt()
+                            ?: orientation
                     if (isAboveAndroidQ) mmr.close() else mmr.release()
                 }
             } catch (e: Throwable) {
                 LogUtils.error(e)
+            }
+        }
+        if (getGeo && type == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE && !mimeType.contains("svg")) {
+            val uri = getUri(id, getMediaType(type))
+            context.contentResolver.openInputStream(uri)?.use {
+                ExifInterface(it).apply {
+                    width = getAttribute(ExifInterface.TAG_IMAGE_WIDTH)?.toInt() ?: width
+                    height = getAttribute(ExifInterface.TAG_IMAGE_LENGTH)?.toInt() ?: height
+                    this.latLong?.apply {
+                        lat = this[0]
+                        log = this[1]
+                    }
+                }
             }
         }
         return AssetEntity(
@@ -215,6 +246,8 @@ interface IDBUtils {
             displayName,
             modifiedDate,
             orientation,
+            lat = lat,
+            lng = log,
             androidQRelativePath = relativePath,
             mimeType = mimeType
         )
@@ -459,7 +492,8 @@ interface IDBUtils {
         shouldKeepPath: Boolean = false,
     ): AssetEntity? {
         val cr = context.contentResolver
-        val uri = cr.insert(contentUri, values) ?: throw RuntimeException("Cannot insert the new asset.")
+        val uri =
+            cr.insert(contentUri, values) ?: throw RuntimeException("Cannot insert the new asset.")
         val id = ContentUris.parseId(uri)
         if (!shouldKeepPath) {
             val outputStream = cr.openOutputStream(uri)
@@ -644,16 +678,23 @@ interface IDBUtils {
         }
     }
 
-    fun getAssetsByRange(context: Context, option: FilterOption, start: Int, end: Int, requestType: Int): List<AssetEntity> {
+    fun getAssetsByRange(
+        context: Context,
+        option: FilterOption,
+        start: Int,
+        end: Int,
+        requestType: Int
+    ): List<AssetEntity> {
         val cr = context.contentResolver
         val args = ArrayList<String>()
         val where = option.makeWhere(requestType, args, false)
         val order = option.orderByCondString()
+        val needGeo = if (requestType == 1) option.getImageFilterCond()?.isNeedGeo else false
         cr.query(allUri, keys(), where, args.toTypedArray(), order)?.use {
             val result = ArrayList<AssetEntity>()
             it.moveToPosition(start - 1)
             while (it.moveToNext()) {
-                val asset = it.toAssetEntity(context, false) ?: continue
+                val asset = it.toAssetEntity(context, false, needGeo ?: false) ?: continue
                 result.add(asset)
 
                 if (result.count() == end - start) {

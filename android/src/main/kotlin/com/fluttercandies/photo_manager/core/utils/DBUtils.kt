@@ -18,18 +18,18 @@ import kotlin.concurrent.withLock
 @Suppress("Deprecation", "InlinedApi")
 object DBUtils : IDBUtils {
     private val locationKeys = arrayOf(
-            MediaStore.Images.ImageColumns.LONGITUDE,
-            MediaStore.Images.ImageColumns.LATITUDE
+        MediaStore.Images.ImageColumns.LONGITUDE,
+        MediaStore.Images.ImageColumns.LATITUDE
     )
 
     override fun keys(): Array<String> =
-            (IDBUtils.storeImageKeys + IDBUtils.storeVideoKeys + IDBUtils.typeKeys + locationKeys).distinct()
-                    .toTypedArray()
+        (IDBUtils.storeImageKeys + IDBUtils.storeVideoKeys + IDBUtils.typeKeys + locationKeys).distinct()
+            .toTypedArray()
 
     override fun getAssetPathList(
-            context: Context,
-            requestType: Int,
-            option: FilterOption
+        context: Context,
+        requestType: Int,
+        option: FilterOption
     ): List<AssetPathEntity> {
         val list = ArrayList<AssetPathEntity>()
         val args = ArrayList<String>()
@@ -161,9 +161,10 @@ object DBUtils : IDBUtils {
             args.toTypedArray(),
             sortOrder
         ) ?: return list
+        val needGeo = if (requestType == 1) option.getImageFilterCond()?.isNeedGeo else false
         cursor.use {
             while (it.moveToNext()) {
-                it.toAssetEntity(context)?.apply {
+                it.toAssetEntity(context, true, needGeo ?: false)?.apply {
                     list.add(this)
                 }
             }
@@ -196,15 +197,16 @@ object DBUtils : IDBUtils {
         val pageSize = end - start
         val sortOrder = getSortOrder(start, pageSize, option)
         val cursor = context.contentResolver.query(
-                allUri,
-                keys,
+            allUri,
+            keys,
             selection,
             args.toTypedArray(),
             sortOrder
         ) ?: return list
+        val needGeo = if (requestType == 1) option.getImageFilterCond()?.isNeedGeo else false
         cursor.use {
             while (it.moveToNext()) {
-                it.toAssetEntity(context)?.apply {
+                it.toAssetEntity(context, true, needGeo ?: false)?.apply {
                     list.add(this)
                 }
             }
@@ -232,7 +234,7 @@ object DBUtils : IDBUtils {
         ) ?: return null
         cursor.use {
             return if (it.moveToNext()) {
-                it.toAssetEntity(context, checkIfExists)
+                it.toAssetEntity(context, checkIfExists, false)
             } else {
                 null
             }

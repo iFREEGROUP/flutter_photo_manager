@@ -18,6 +18,7 @@ class FilterOption {
   /// * [durationConstraint]: An optional parameter, defaults to `DurationConstraint()`. Specifies the duration constraints for queried assets.
   const FilterOption({
     this.needTitle = false,
+    this.needGeo = false,
     this.sizeConstraint = const SizeConstraint(),
     this.durationConstraint = const DurationConstraint(),
   });
@@ -26,6 +27,8 @@ class FilterOption {
   ///
   /// If not needed, please pass false, default is false.
   final bool needTitle;
+
+  final bool needGeo;
 
   /// See [SizeConstraint]
   final SizeConstraint sizeConstraint;
@@ -42,11 +45,13 @@ class FilterOption {
   /// * [durationConstraint]: An optional parameter. Specifies the duration constraints for queried assets.
   FilterOption copyWith({
     bool? needTitle,
+    bool? needGeo,
     SizeConstraint? sizeConstraint,
     DurationConstraint? durationConstraint,
   }) {
     return FilterOption(
       needTitle: needTitle ?? this.needTitle,
+      needGeo: needGeo ?? this.needGeo,
       sizeConstraint: sizeConstraint ?? this.sizeConstraint,
       durationConstraint: durationConstraint ?? this.durationConstraint,
     );
@@ -60,6 +65,7 @@ class FilterOption {
   FilterOption merge(FilterOption? other) {
     return copyWith(
       needTitle: other?.needTitle,
+      needGeo: other?.needGeo,
       sizeConstraint: other?.sizeConstraint,
       durationConstraint: other?.durationConstraint,
     );
@@ -69,6 +75,7 @@ class FilterOption {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'title': needTitle,
+      'geo': needGeo,
       'size': sizeConstraint.toMap(),
       'duration': durationConstraint.toMap(),
     };

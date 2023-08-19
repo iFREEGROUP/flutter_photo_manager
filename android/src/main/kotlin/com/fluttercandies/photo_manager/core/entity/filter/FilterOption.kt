@@ -8,4 +8,6 @@ abstract class FilterOption {
     abstract fun orderByCondString(): String?
 
     abstract fun makeWhere(requestType: Int, args: ArrayList<String>, needAnd: Boolean = true): String
+
+    abstract fun getImageFilterCond(): FilterCond?
 }

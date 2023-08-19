@@ -37,6 +37,10 @@ class CommonFilterOption(map: Map<*, *>) : FilterOption() {
         return " ( $where ) "
     }
 
+    override fun getImageFilterCond(): FilterCond {
+        return imageOption
+    }
+
     override fun orderByCondString(): String? {
         if (orderByCond.isEmpty()) {
             return null
@@ -169,6 +173,7 @@ class FilterCond {
     var isShowTitle = false
     lateinit var sizeConstraint: SizeConstraint
     lateinit var durationConstraint: DurationConstraint
+    var isNeedGeo = false
 
     companion object {
         private const val widthKey = MediaStore.Files.FileColumns.WIDTH

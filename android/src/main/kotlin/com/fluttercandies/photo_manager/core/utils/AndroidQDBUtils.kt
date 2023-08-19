@@ -155,16 +155,16 @@ object AndroidQDBUtils : IDBUtils {
         }
         val sortOrder = getSortOrder(page * size, size, option)
         val cursor = context.contentResolver.query(
-                allUri,
-                keys(),
-                selection,
-                args.toTypedArray(),
-                sortOrder
+            allUri,
+            keys(),
+            selection,
+            args.toTypedArray(),
+            sortOrder
         ) ?: return list
-		val needGeo = if (requestType == 1) option.imageOption.isNeedGeo else false
+        val needGeo = if (requestType == 1) option.getImageFilterCond()?.isNeedGeo else false
         cursor.use {
             cursorWithRange(it, page * size, size) { cursor ->
-                cursor.toAssetEntity(context)?.apply {
+                cursor.toAssetEntity(context, true, needGeo ?: false)?.apply {
                     list.add(this)
                 }
             }
@@ -202,10 +202,10 @@ object AndroidQDBUtils : IDBUtils {
             args.toTypedArray(),
             sortOrder
         ) ?: return list
-		val needGeo = if (requestType == 1) option.imageOption.isNeedGeo else false
+        val needGeo = if (requestType == 1) option.getImageFilterCond()?.isNeedGeo else false
         cursor.use {
             cursorWithRange(it, start, pageSize) { cursor ->
-                cursor.toAssetEntity(context)?.apply {
+                cursor.toAssetEntity(context, true, needGeo ?: false)?.apply {
                     list.add(this)
                 }
             }
@@ -217,97 +217,26 @@ object AndroidQDBUtils : IDBUtils {
 
     override fun keys(): Array<String> {
         return (IDBUtils.storeImageKeys + IDBUtils.storeVideoKeys + IDBUtils.typeKeys + arrayOf(
-                RELATIVE_PATH
+            RELATIVE_PATH
         )).distinct().toTypedArray()
     }
 
-private fun convertCursorToAssetEntity(
-        context: Context,
-        cursor: Cursor,
-        needGeo: Boolean
-    ): AssetEntity {
-        val id = cursor.getString(MediaStore.MediaColumns._ID)
-        val path = cursor.getString(MediaStore.MediaColumns.DATA)
-        var date = cursor.getLong(MediaStore.Images.Media.DATE_TAKEN)
-        if (date == 0L) {
-            date = cursor.getLong(MediaStore.Images.Media.DATE_ADDED)
-        } else {
-            date /= 1000
-        }
-        val type = cursor.getInt(MEDIA_TYPE)
-        val mimeType = cursor.getString(MIME_TYPE)
-        val duration = if (type == MEDIA_TYPE_IMAGE) 0
-        else cursor.getLong(MediaStore.Video.VideoColumns.DURATION)
-        var width = cursor.getInt(MediaStore.MediaColumns.WIDTH)
-        var height = cursor.getInt(MediaStore.MediaColumns.HEIGHT)
-        val displayName = cursor.getString(MediaStore.Images.Media.DISPLAY_NAME)
-        val modifiedDate = cursor.getLong(MediaStore.MediaColumns.DATE_MODIFIED)
-        val orientation: Int = cursor.getInt(MediaStore.MediaColumns.ORIENTATION)
-        val relativePath: String = cursor.getString(MediaStore.MediaColumns.RELATIVE_PATH)
-        var lat = 0.0
-        var log = 0.0
-        var getGeo = needGeo
-        if ((width == 0 || height == 0)
-            && path.isNotBlank()
-            && File(path).exists()
-            && !mimeType.contains("svg")
-        ) {
-            openFileExifInterface(context, id, type) {
-                width = it.getAttribute(ExifInterface.TAG_IMAGE_WIDTH)?.toInt() ?: width
-                height = it.getAttribute(ExifInterface.TAG_IMAGE_LENGTH)?.toInt() ?: height
-                if (getGeo) {
-                    it.latLong?.apply {
-                        lat = this[0]
-                        log = this[1]
-                    }
-                    getGeo = false
-                }
-            }
-        }
-        if (getGeo) {
-            openFileExifInterface(context, id, type) {
-                it.latLong?.apply {
-                    lat = this[0]
-                    log = this[1]
-                }
-            }
-        }
-        return AssetEntity(
-            id,
-            path,
-            duration,
-            date,
-            width,
-            height,
-            getMediaType(type),
-            displayName,
-            modifiedDate,
-            orientation,
-            lat = lat,
-            lng = log,
-            androidQRelativePath = relativePath,
-            mimeType = mimeType
-        )
-    }
-
-
     override fun getAssetEntity(
-            context: Context,
-            id: String,
-            checkIfExists: Boolean
+        context: Context,
+        id: String,
+        checkIfExists: Boolean
     ): AssetEntity? {
         val selection = "$_ID = ?"
         val args = arrayOf(id)
         val cursor = context.contentResolver.query(
-                allUri,
-                keys(),
-                selection,
-                args,
-                null
+            allUri,
+            keys(),
+            selection,
+            args,
+            null
         ) ?: return null
         cursor.use {
-			// return if (it.moveToNext()) convertCursorToAssetEntity(context, it, false)
-            return if (it.moveToNext()) it.toAssetEntity(context, checkIfExists)
+            return if (it.moveToNext()) it.toAssetEntity(context, checkIfExists, false)
             else null
         }
     }
