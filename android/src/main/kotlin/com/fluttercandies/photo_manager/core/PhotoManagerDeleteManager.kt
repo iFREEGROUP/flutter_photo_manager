@@ -8,9 +8,9 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
-import io.flutter.plugin.common.PluginRegistry
 import com.fluttercandies.photo_manager.core.utils.IDBUtils
 import com.fluttercandies.photo_manager.util.ResultHandler
+import io.flutter.plugin.common.PluginRegistry
 
 class PhotoManagerDeleteManager(val context: Context, private var activity: Activity?) :
     PluginRegistry.ActivityResultListener {
@@ -51,11 +51,30 @@ class PhotoManagerDeleteManager(val context: Context, private var activity: Acti
             ids.toTypedArray()
         )
     }
+//
+//    enum class Action {
+//        Delete,
+//        Trash,
+//    }
 
     private var androidRHandler: ResultHandler? = null
 
     @RequiresApi(Build.VERSION_CODES.R)
     fun deleteInApi30(uris: List<Uri?>, resultHandler: ResultHandler) {
+        this.androidRHandler = resultHandler
+        val pendingIntent = MediaStore.createDeleteRequest(cr, uris.mapNotNull { it })
+        activity?.startIntentSenderForResult(
+            pendingIntent.intentSender,
+            androidRDeleteRequestCode,
+            null,
+            0,
+            0,
+            0
+        )
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    fun moveToTrashInApi30(uris: List<Uri?>, resultHandler: ResultHandler) {
         this.androidRHandler = resultHandler
         val pendingIntent = MediaStore.createTrashRequest(cr, uris.mapNotNull { it }, true)
         activity?.startIntentSenderForResult(

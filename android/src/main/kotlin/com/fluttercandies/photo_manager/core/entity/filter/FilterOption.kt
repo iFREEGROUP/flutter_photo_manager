@@ -1,7 +1,5 @@
 package com.fluttercandies.photo_manager.core.entity.filter
 
-import java.util.ArrayList
-
 abstract class FilterOption {
     abstract val containsPathModified: Boolean
 

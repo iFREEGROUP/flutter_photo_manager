@@ -15,8 +15,8 @@ import androidx.exifinterface.media.ExifInterface
 import com.fluttercandies.photo_manager.core.PhotoManager
 import com.fluttercandies.photo_manager.core.cache.ScopedCache
 import com.fluttercandies.photo_manager.core.entity.AssetEntity
-import com.fluttercandies.photo_manager.core.entity.filter.FilterOption
 import com.fluttercandies.photo_manager.core.entity.AssetPathEntity
+import com.fluttercandies.photo_manager.core.entity.filter.FilterOption
 import com.fluttercandies.photo_manager.util.LogUtils
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -44,7 +44,7 @@ object AndroidQDBUtils : IDBUtils {
         val selections =
             "$BUCKET_ID IS NOT NULL $where"
 
-        val cursor = context.contentResolver.query(
+        val cursor = context.contentResolver.logQuery(
             allUri,
             IDBUtils.storeBucketKeys,
             selections,
@@ -90,7 +90,7 @@ object AndroidQDBUtils : IDBUtils {
         val selections =
             "$BUCKET_ID IS NOT NULL $where"
 
-        val cursor = context.contentResolver.query(
+        val cursor = context.contentResolver.logQuery(
             allUri,
             IDBUtils.storeBucketKeys,
             selections,
@@ -154,7 +154,8 @@ object AndroidQDBUtils : IDBUtils {
             "$BUCKET_ID = ? $where"
         }
         val sortOrder = getSortOrder(page * size, size, option)
-        val cursor = context.contentResolver.query(
+
+        val cursor = context.contentResolver.logQuery(
             allUri,
             keys(),
             selection,
@@ -262,7 +263,7 @@ object AndroidQDBUtils : IDBUtils {
 
         val selection =
             "$BUCKET_ID IS NOT NULL $where $idSelection"
-        val cursor = context.contentResolver.query(
+        val cursor = context.contentResolver.logQuery(
             allUri,
             IDBUtils.storeBucketKeys,
             selection, args.toTypedArray(),
@@ -353,7 +354,7 @@ object AndroidQDBUtils : IDBUtils {
         }
 
         val cr = context.contentResolver
-        val cursor = cr.query(
+        val cursor = cr.logQuery(
             allUri,
             copyKeys.toTypedArray() + arrayOf(RELATIVE_PATH),
             idSelection,
@@ -423,7 +424,7 @@ object AndroidQDBUtils : IDBUtils {
             Log.i(TAG, "The removeAllExistsAssets is starting.")
             val removedList = ArrayList<String>()
             val cr = context.contentResolver
-            val cursor = cr.query(
+            val cursor = cr.logQuery(
                 allUri,
                 arrayOf(
                     BaseColumns._ID,
@@ -481,7 +482,7 @@ object AndroidQDBUtils : IDBUtils {
 
     private fun getRelativePath(context: Context, galleryId: String): String? {
         val cr = context.contentResolver
-        val cursor = cr.query(
+        val cursor = cr.logQuery(
             allUri,
             arrayOf(BUCKET_ID, RELATIVE_PATH),
             "$BUCKET_ID = ?",
@@ -498,7 +499,7 @@ object AndroidQDBUtils : IDBUtils {
 
     override fun getSomeInfo(context: Context, assetId: String): Pair<String, String?>? {
         val cr = context.contentResolver
-        val cursor = cr.query(
+        val cursor = cr.logQuery(
             allUri,
             arrayOf(BUCKET_ID, RELATIVE_PATH),
             "$_ID = ?",

@@ -259,6 +259,13 @@ class PhotoManagerPlugin with BasePlugin, IosPlugin, AndroidPlugin {
     return deleted.cast<String>();
   }
 
+  Future<List<String>> moveToTrash(List<AssetEntity> list) {
+    return _channel.invokeMethod(
+      PMConstants.mMoveToTrash,
+      <String, dynamic>{'ids': list.map((e) => e.id).toList()},
+    ).then((value) => value.cast<String>());
+  }
+
   final Map<String, dynamic> onlyAddPermission = <String, dynamic>{
     'onlyAddPermission': true,
   };
@@ -543,10 +550,12 @@ class PhotoManagerPlugin with BasePlugin, IosPlugin, AndroidPlugin {
     );
   }
 
-  Future<void> presentLimited() async {
-    assert(Platform.isIOS);
-    if (Platform.isIOS) {
-      return _channel.invokeMethod(PMConstants.mPresentLimited);
+  Future<void> presentLimited(RequestType type) async {
+    assert(Platform.isIOS || Platform.isAndroid);
+    if (Platform.isIOS || Platform.isAndroid) {
+      return _channel.invokeMethod(PMConstants.mPresentLimited, {
+        'type': type.value,
+      });
     }
   }
 
